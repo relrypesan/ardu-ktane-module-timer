@@ -1,8 +1,7 @@
 /**   Arduino: Nano
   *   created by: Relry Pereira dos Santos
   */
-#include "KtaneModule.h"
-#include <Wire.h>
+#include <KtaneModule.h>
 #include <TM1637Display.h>
 
 #define F_CODE_NAME   F("module-display")
@@ -15,16 +14,17 @@ KtaneModule module;
 
 TM1637Display display = TM1637Display(DISPLAY_CLK, DISPLAY_DIO);
 
-volatile long timeToExplodeSeg, timeDisplayMillis;
-volatile Status currentStatusModule = RESETING;
+volatile long timeToExplodeMillis, timeDisplayMillis;
 volatile bool newMessage = false;
 
-Status lastStatusModule = currentStatusModule;
+Status lastStatusModule;
 unsigned long previousMillis = 0;
 int interval = 1000;
 
 void setup() {
   Serial.begin(38400);
+
+  timeToExplodeMillis = timeDisplayMillis = 12000;
 
   delay(1000);
 
@@ -37,19 +37,16 @@ void setup() {
 
   module.init(F_CODE_NAME, F_VERSION);
 
-  timeDisplayMillis = 120000;
-
   display.clear();
   display.setBrightness(0x0a);
-
-  startGame();
+  printDisplayTime(timeDisplayMillis);
 }
 
 void loop() {
 
   // Verifica se houve mensagem nova recebida pelo barramento I2C
   if (newMessage) {
-    switch (currentStatusModule) {
+    switch (module.getRegModule()->status) {
       case IN_GAME:
         Serial.println(F("Em jogo"));
         break;
@@ -61,25 +58,29 @@ void loop() {
   }
 
   // verifica se houve mudança no status do modulo
-  if (lastStatusModule != currentStatusModule) {
+  if (lastStatusModule != module.getRegModule()->status) {
     Serial.println((String)F("STATUS anterior: ") + Status_name[lastStatusModule]);
-    Serial.println((String)F("STATUS atual...: ") + Status_name[currentStatusModule]);
+    Serial.println((String)F("STATUS atual...: ") + Status_name[module.getRegModule()->status]);
 
-    switch (currentStatusModule) {
+    switch (module.getRegModule()->status) {
       case IN_GAME:
         Serial.println(F("Iniciando o jogo e o contador."));
+        break;
+      case RESETING:
+        timeDisplayMillis = timeToExplodeMillis;
+        printDisplayTime(timeToExplodeMillis);
         break;        
     }
 
-    lastStatusModule = currentStatusModule;
+    lastStatusModule = module.getRegModule()->status;
   }
 
-  switch (currentStatusModule) {
+  switch (module.getRegModule()->status) {
     case IN_GAME:
       executeInGame();
       break;
     // default:
-    //   Serial.println("currentStatusModule: " + Status_name[currentStatusModule]);
+    //   Serial.println("module.getRegModule()->status: " + Status_name[module.getRegModule()->status]);
   }
 }
 
@@ -90,14 +91,9 @@ void executeInGame() {
     timeDisplayMillis -= interval;
     if (timeDisplayMillis <= 0) {
       timeDisplayMillis = 0;
-      currentStatusModule = STOP_GAME;
+      module.stopGame();
     }
-    long timeTmp = timeDisplayMillis;
-    if (timeTmp < 60000) {
-      timeTmp *= 10;
-    }
-    Serial.println("Tempo a ser printado: " + ((String)timeTmp));
-    display.showNumberDecEx((timeTmp / 1000), 0b01000000);
+    printDisplayTime(timeDisplayMillis);
     if (timeDisplayMillis <= 60000) {
       interval = 100;
     }
@@ -106,25 +102,30 @@ void executeInGame() {
 }
 
 void printDisplayTime(long millis) {
-  if (millis ) {
-
+  byte dot = 0b00100000;
+  long timeTmp = millis / 100;
+  if (millis >= 60000) {
+    int min = millis / 60000;
+    int seg = (millis - (min * 60000)) / 1000;
+    timeTmp = min * 100 + seg;
+    dot = 0b01000000;
   }
+  display.showNumberDecEx(timeTmp, dot);
 }
 
 void resetGame() {
-  if(module.getRegModule()->status == READY) {
-    timeDisplayMillis = timeToExplodeSeg;    
-  }
+  timeDisplayMillis = timeToExplodeMillis;
+  printDisplayTime(timeToExplodeMillis);
 }
 
 bool validaModuloReady() {
-  Serial.println("Validando se modulo está pronto");
+  Serial.println(F("Validando se modulo esta pronto"));
   delay(500);
-  if(timeDisplayMillis == timeToExplodeSeg) {
-    Serial.println("Modulo pronto para iniciar.");
+  if(timeDisplayMillis == timeToExplodeMillis) {
+    Serial.println(F("Modulo pronto para iniciar."));
     return true;
   }
-  Serial.println("Modulo NAO esta pronto para iniciar.");
+  Serial.println(F("Modulo NAO esta pronto para iniciar."));
   return false;
   // return true;
 }
@@ -133,7 +134,6 @@ void startGame() {
   Serial.println(F("startGame chamado."));
   if (!newMessage) {
     newMessage = true;
-    currentStatusModule = IN_GAME;
     Serial.println(F("Nova mensagem"));
   } else {
     Serial.println(F("WARNING!!! Mensagem ignorada"));
@@ -143,6 +143,7 @@ void startGame() {
 void configWrite(uint8_t preset) {
   Serial.println(F("Config modulo"));
   if(Wire.available()) {
+    Serial.println("preset: " + ((String)(char) preset));
     if((char)preset == 'c') {
       Serial.println(F("Configurando tempo do display."));
       int numBytes = Wire.available();
@@ -154,7 +155,9 @@ void configWrite(uint8_t preset) {
       String message = String(arrayChars);
       long time = message.toInt();
       Serial.println((String)F("Tempo recebido do master: '") + time + (String)F("'"));
-      timeDisplayMillis = time;
+      timeToExplodeMillis = time;
     }
   }
+  Serial.println(F("Resetando modulo, pos config."));
+  resetGame();
 }
