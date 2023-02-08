@@ -4,8 +4,8 @@
 #include <KtaneModule.h>
 #include <TM1637Display.h>
 
-#define F_CODE_NAME   F("module-display")
-#define F_VERSION     F("v0.1.0-a1")
+#define F_CODE_NAME F("module-display")
+#define F_VERSION F("v0.1.0-a1")
 
 #define DISPLAY_DIO 6
 #define DISPLAY_CLK 7
@@ -69,7 +69,7 @@ void loop() {
       case RESETING:
         timeDisplayMillis = timeToExplodeMillis;
         printDisplayTime(timeToExplodeMillis);
-        break;        
+        break;
     }
 
     lastStatusModule = module.getRegModule()->status;
@@ -79,8 +79,8 @@ void loop() {
     case IN_GAME:
       executeInGame();
       break;
-    // default:
-    //   Serial.println("module.getRegModule()->status: " + Status_name[module.getRegModule()->status]);
+      // default:
+      //   Serial.println("module.getRegModule()->status: " + Status_name[module.getRegModule()->status]);
   }
 }
 
@@ -121,7 +121,7 @@ void resetGame() {
 bool validaModuloReady() {
   Serial.println(F("Validando se modulo esta pronto"));
   delay(500);
-  if(timeDisplayMillis == timeToExplodeMillis) {
+  if (timeDisplayMillis == timeToExplodeMillis) {
     Serial.println(F("Modulo pronto para iniciar."));
     return true;
   }
@@ -142,13 +142,13 @@ void startGame() {
 
 void configWrite(uint8_t preset) {
   Serial.println(F("Config modulo"));
-  if(Wire.available()) {
-    Serial.println("preset: " + ((String)(char) preset));
-    if((char)preset == 'c') {
+  if (Wire.available()) {
+    Serial.println("preset: " + ((String)(char)preset));
+    if ((char)preset == 'c') {
       Serial.println(F("Configurando tempo do display."));
       int numBytes = Wire.available();
-      char arrayChars[numBytes+1];
-      for(int i = 0; i < numBytes; i++) {
+      char arrayChars[numBytes + 1];
+      for (int i = 0; i < numBytes; i++) {
         arrayChars[i] = Wire.read();
       }
       arrayChars[numBytes] = '\0';
